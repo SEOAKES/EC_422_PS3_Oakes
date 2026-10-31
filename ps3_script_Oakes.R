@@ -94,3 +94,47 @@ can_gas_q |> autoplot(Volume)
 # We sum the monthly values for gas production rather than take their mean because we want the total amount of gas production within a quarter, not the mean gas production in a quarter. Taking the mean might also smooth out seasonality that we want to take note of.
 # The quarterly series is still seasonal, peaking in Q1 and Q4 and dropping in Q2 and Q3.
 
+# Plotting with autoplot
+
+retail_ts |> autoplot(sales)
+
+retail_ts |>
+  autoplot(sales) +
+  labs(
+    title = "U.S. Retail and Food Services Sales",
+    subtitle = "Seasonally adjusted vs. not seasonally adjusted",
+    x = NULL, y = "Millions of dollars", color = NULL
+  ) +
+  theme_minimal()
+
+# There are consistent spikes and drops in the NSA series, with huge spikes occurring at the end of a year and huge drops occurring at the beginning of a year.
+# The SA series does not have this same pattern. Its levels waver up and down the y-axis, but those small changes don't seem consistent or to correspond to seasonal changes.
+
+#The two series do follow the same path in the long run. 
+# Both the NSA and SA series are trending up at the same approximate rate over time, and larger peaks and valleys that are caused by recessions or high economic growth are evident in both series.
+
+can_gas |>
+  autoplot(Volume) +
+  labs(
+    title = "Natural Gas Production in Canada",
+    subtitle = "Monthly amounts, from January 1960 to February 2005",
+    x = NULL, y = "Billions of cubic meters", color = NULL
+  ) +
+  theme_minimal()
+
+# Adding a ggplot2 layer to the plot
+
+retail_ts |>
+  autoplot(sales) +
+  labs(
+    title = "U.S. Retail and Food Services Sales",
+    subtitle = "Seasonally adjusted vs. not seasonally adjusted",
+    x = NULL, y = "Millions of dollars", color = NULL
+  ) +
+  scale_y_continuous(labels = scales::label_comma(scale =  1))
+  theme_minimal()
+
+# I chose to use scale_y_continuous() to clean up the y-axis.
+# Previously, the units of the y-axis were in scientific notation, which is confusing and didn't quite match the y-axis label of units being in millions of dollars. To match the axis label, the display units on the y-axis needed to match the scale of units in the data set. So, I changed their scale so the data set, y-axis labels, and y-axis units all match up.
+
+
