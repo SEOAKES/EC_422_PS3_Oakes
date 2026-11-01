@@ -392,3 +392,4 @@ gas_cv_fc_rolling |>
 ## The model whose accuracy changed more with the rolling window was the TSLM model.
 ## I imagine this is the case because the TSLM model struggles to make adjust to extreme changes over time in the data, both in its levels and seasonality.
 ## By changing the forecast generating method to a rolling window, the TSLM model doesn't have to take into account old observations that don't correspond to the current trends of the series. Its ability to respond to changes in how the data series generates is much more enhanced.
+

@@ -1,0 +1,203 @@
+---
+title: "ps3_writeup_Oakes"
+format:
+  html:
+    toc: true
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+editor: visual
+---
+
+**GitHub repo:** <https://github.com/SEOAKES/EC_422_PS3_Oakes>
+
+## Time and Tsibbles
+
+The two data sets that are used and transformed throughout this document are `retail_ts` and `can_gas`.
+
+`retail_ts` contains sales data gathered by the U.S. Census Bureau on retail trade and food services (titled [Advance Retail Sales: Retail Trade and Food Services](https://fred.stlouisfed.org/series/RSAFS)). The data are of a monthly frequency and in units of millions of dollars, running from January 1992 to September 2026. Both the seasonally adjusted and non-seasonally adjusted version of the data are contained in the data set. `retail_ts` is the data after it has been reshaped to long format and turned into a `tsibble`. The index is `yearmonth` and the key is `series_id`, with two series "RSAFS" (seasonally adjusted) and "RSAFSNA" (not seasonally adjusted).
+
+The code chunk below will load in the raw retail sales data and the first few rows of data, where the `observation_date` column is of class `<date>`.
+
+```{r}
+
+#| echo: false
+
+# Loading in the raw data
+
+library(tidyverse)
+
+retail_raw <- read_csv("data/retail_sales_raw.csv")
+
+head(retail_raw)
+```
+
+The next code chunk will perform some data clean-up to turn the raw retail sales data into a long format `tsibble`, producing a look at the first few rows of data and checking if the data has any gaps.
+
+```{r}
+#| echo: false
+
+# Classifying "observation_date" as <date>
+
+retail_raw <- read_csv(
+  "data/retail_sales_raw.csv",
+  na = ".",
+  col_types = cols(
+    observation_date = col_date(format = "%Y-%m-%d"),
+    RSAFS = col_double(),
+    RSAFSNA = col_double()
+  )
+)
+
+# Reshaping data from a wide to a long format
+
+retail_raw_long <- retail_raw |>
+  select(observation_date, RSAFS, RSAFSNA) |>
+  pivot_longer(cols = c(RSAFS, RSAFSNA), 
+               names_to = "series_id", 
+               values_to = "sales")
+
+head(retail_raw_long)
+
+# Creating a tsibble
+
+library(fpp3)
+
+retail_ts <- retail_raw_long |>
+  mutate(Month = yearmonth(observation_date)) |>
+  as_tsibble(index = Month, key = series_id)
+
+head(retail_ts)
+
+has_gaps(retail_ts)
+```
+
+`can_gas` is from a ready-made `tsibble` that comes with the `fpp3` package, titled `canadian_gas`. It holds data on the amount natural gas production in Canada. The data are of a monthly frequency and measured in units of billions of cubic meters. The data set runs from January 1960 to February 2005. `can_gas` is a working copy of `canadian_gas` with an index of `yearmonth` and no key, since there is only one series in the data set.
+
+Below is a code chunk that returns the first few rows of `canadian_gas`, checks its key and index, then renders it into its working copy `can_gas`, checking if it has any gaps in the data.
+
+```{r}
+#| echo: false
+
+head(canadian_gas)
+
+key_vars(canadian_gas)
+index_var(canadian_gas)
+
+can_gas <- canadian_gas |>
+  select(Month, Volume)
+
+has_gaps(can_gas)
+```
+
+This next chunk creates the `tsibble` `can_gas_recent` from `can_gas`, including only observations from January 1990 onward. The `tsibble` is mutated to the year, month, and quarter of an observation as separate columns, and with the new `month` column, the average `Volume` in each calendar month since 1990 is formatted into a `tibble`. An additional small `tsibble` made with `head()` was made to practice date arithmetic.
+
+```{r}
+#| echo: false
+
+# Working with dates in a tsibble: filtering by date
+
+can_gas_recent <- can_gas |>
+  filter(Month >= yearmonth("1990 Jan"))
+
+# Working with dates in a tsibble: extracting parts of a date
+
+can_gas_recent <- can_gas_recent |>
+  mutate(year = year(Month),
+         month = month(Month, label = TRUE),
+         quarter = quarter(Month))
+
+can_gas_recent |>
+  as_tibble() |>
+  group_by(month) |>
+  summarize(avg_volume = mean(Volume)) |>
+  knitr::kable(digits = 2)
+
+# Working with dates in a tsibble: data arithmetic
+
+can_gas_recent |>
+  mutate(next_month = Month + 1,
+         same_month_last_year = Month - 12) |>
+  head()
+```
+
+The calendar month with the highest average production is December at 17.15 billion cubic meters, whereas the month with the lowest average production is June at 14.94 billion cubic meters.
+
+`can_gas` was then further used to create `can_gas_q`, which indexes the data by `yearquarter`. The first few rows are provided, as well as a plot of `Volume` by quarter.
+
+```{r}
+#| echo: false
+
+# Working with dates in a tsibble: changing the frequency of a series
+
+can_gas_q <- can_gas |>
+  filter(Month <= yearmonth("2004 Dec")) |>
+  index_by(Quarter = yearquarter(Month)) |>
+  summarize(Volume = sum(Volume))
+
+head(can_gas_q)
+
+can_gas_q |> autoplot(Volume)
+```
+
+We `sum()` the monthly values for gas production rather than take the `mean()` of the observations of quarterly gas production in `can_gas_q` because we want the *total* amount of gas production within a quarter, not the *average* gas production in a quarter. Taking the mean might also smooth out seasonality that we want to take note of. The quarterly series appears to still be seasonal, peaking in Q1 and Q4 and dropping in Q2 and Q3.
+
+Returning to `retail_ts`, the next code chunk creates a basic plot of `retail_ts` with `autoplot` and a more customized plot.
+
+```{r}
+#| echo: false
+
+# Plotting with autoplot
+
+library(ggplot2)
+
+retail_ts |> autoplot(sales)
+
+retail_ts |>
+  autoplot(sales) +
+  labs(
+    title = "U.S. Retail and Food Services Sales",
+    subtitle = "Seasonally adjusted vs. not seasonally adjusted",
+    x = NULL, y = "Millions of dollars", color = NULL
+  ) +
+  scale_y_continuous(labels = scales::label_comma(scale =  1))
+theme_minimal()
+```
+
+I chose to use scale_y_continuous() to clean up the y-axis of the customized plot of `retail_ts`. Previously, the units of the y-axis were in scientific notation, which is confusing and didn't quite match the y-axis label of units being in millions of dollars. To match the axis label, the display units on the y-axis needed to match the scale of units in the data set. So, I changed their scale so the data set, y-axis labels, and y-axis units all match up.
+
+There are consistent spikes and drops in the NSA series, with huge spikes occurring at the end of a year and huge drops occurring at the beginning of a year. The SA series does not have this same pattern. Its levels waver up and down the y-axis, but those small changes don't seem consistent or to correspond to seasonal changes.
+
+Additionally, the two series do follow the same path in the long run. Both the NSA and SA series are trending up at the same approximate rate over time, and larger peaks and valleys that are caused by recessions or high economic growth are evident in both series.
+
+Below, I've also included a customized plot of `can_gas.`
+
+```{r}
+#| echo: false
+
+can_gas |>
+  autoplot(Volume) +
+  labs(
+    title = "Natural Gas Production in Canada",
+    subtitle = "Monthly amounts, from January 1960 to February 2005",
+    x = NULL, y = "Billions of cubic meters", color = NULL
+  ) +
+  theme_minimal()
+```
+
+## Transformations
+
+Include the plots and written answers requested in Part 3.
+
+## Seasonality
+
+Include your plots, model estimation output (as a table), Ljung–Box test results, and written answers requested in Part 4.
+
+## Forecast Evaluation
+
+Include your accuracy tables, the DM test results, and the written answers requested in Part 5.
+
+## Reflection
+
+A short paragraph (4–6 sentences) on the residual check in Part 4.4c and the forecast evaluation in Part 5: what did the residuals from the simple trend + seasonal model still look like they were missing, and what do you expect a model that could capture that missing structure to look like? (You don’t need to know the answer in detail yet — just reflect on what you saw.)
