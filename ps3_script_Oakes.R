@@ -338,3 +338,57 @@ can_gas_fit |>
 ## The residuals do not look like white noise. The plot of the ACF clearly shows persistence over time in the residuals, which means there is some factor unaccounted for in the linear trend model that would model the effect of these residuals and take care of them.
 ## At the 5% level, the Ljung-Box text concludes that we reject the null hypothesis that the first 24 lags are uncorrelated.
 
+gas_cv_fc <- can_gas |>
+  select(Month, Volume) |>
+  stretch_tsibble(.init = 240, .step = 1) |>
+  model(snaive = SNAIVE(Volume),
+        tslm = TSLM(log(Volume) ~ trend() + season())) |>
+  forecast(h = 1)
+
+gas_cv_fc |>
+  accuracy(can_gas, measures = list(MAE = MAE, RMSE = RMSE))
+
+## First forecast that is evaluated: January 1980
+## Last forecast that is evaluated: March 2005
+## MAE of snaive: 0.562
+## MAE of tslm: 4.01
+## RMSE of snaive: 0.702
+## RMSE of tslm: 4.36
+
+## It appears that the SNAIVE model forecasts much more accurately, and both the MAE and RMSE metrics agree on this. 
+
+errs <- gas_cv_fc |>
+  as_tibble() |>
+  left_join(as_tibble(can_gas) |>
+              select(Month, actual = Volume),
+            by = "Month") |>
+  mutate(e = actual - .mean) |>
+  select(Month, .model, e) |>
+  pivot_wider(names_from = .model, values_from = e) |>
+  na.omit()
+
+forecast::dm.test(errs$snaive, errs$tslm, h = 1, power = 1)
+
+## DM statistic: -31.278
+## p-value: < 2.2e-16
+
+## With how large the p-value is, it's clear that we must reject the null hypothesis of the DM test that the SNAIVE model and TSLM model have equal forecast accuracy. In this case, SNAIVE is clearly more effective at forecasting.
+
+gas_cv_fc_rolling <- can_gas |>
+  select(Month, Volume) |>
+  slide_tsibble(.size = 240, .step = 1) |>
+  model(snaive = SNAIVE(Volume),
+        tslm = TSLM(log(Volume) ~ trend() + season())) |>
+  forecast(h = 1)
+
+gas_cv_fc_rolling |>
+  accuracy(can_gas, measures = list(MAE = MAE, RMSE = RMSE))
+
+## MAE of snaive with rolling window: 0.562
+## MAE of tslm with rolling window: 2.09
+## RMSE of snaive with rolling window: 0.702
+## RMSE of tslm with rolling window: 2.42
+
+## The model whose accuracy changed more with the rolling window was the TSLM model.
+## I imagine this is the case because the TSLM model struggles to make adjust to extreme changes over time in the data, both in its levels and seasonality.
+## By changing the forecast generating method to a rolling window, the TSLM model doesn't have to take into account old observations that don't correspond to the current trends of the series. Its ability to respond to changes in how the data series generates is much more enhanced.
