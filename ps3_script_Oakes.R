@@ -205,6 +205,8 @@ can_gas |>
 ## In this case, I don't think the log approximation is very good.
 ## The growth levels (both positive and negative) that can_gas experiences, particularly in the 1960s and the 1980s, are so extreme that the approximation that the first difference of the logged series provides is just not accurate enough. If the series weren't as volatile, perhaps the difference of the logged series would be acceptable.
 
+# Seeing, decomposing, and modeling seasonality
+
 retail_ts <- retail_ts |>
   group_by_key() |>
   mutate(growth_mom = 100 * difference(log(sales))) |>
@@ -220,4 +222,119 @@ retail_ts |>
 
 ## The month-over-month growth rate in the NSA series is much noisier than the month-over-month growth rate of the SA series.
 ## As I noted before in Part 2.7b, the NSA series is definitely affected by seasonality, and this shows in the month-over-month growth rate. When you remove seasonal factors, the growth rate (in this case, the change in retail sales between months) actually doesn't change that much.
+
+retail_ts |>
+  filter(series_id == "RSAFSNA") |>
+  gg_season(sales) + 
+  labs(
+    title = "Seasonal Pattern in NSA Retail Sales",
+    y = "Millions of dollars"
+  ) +
+  scale_y_continuous(labels = scales::label_comma(scale =  1))
+  theme_minimal()
+
+retail_ts |>
+  filter(series_id == "RSAFS") |>
+  gg_season(sales) + 
+  labs(
+    title = "Seasonal Pattern in SA Retail Sales",
+    y = "Millions of dollars"
+  ) +
+  scale_y_continuous(labels = scales::label_comma(scale =  1))
+  theme_minimal()
+
+## The NSA plot has many more peaks and valleys between months than the SA plot.
+## These peaks and valleys are virtually non-existent in the SA plot, meaning they can be clearly attributed to seasonal effects on retail sales; by removing their effects from the plot, we can more clearly see the steady positive trend of retail sales over time (aside from some outlier, of course, such as the COVID-19 pandemic).
+
+can_gas |>
+  gg_season(log_volume) + 
+    labs(
+      title = "Monthly Natural Gas Production in Canada",
+      subtitle = "Plotted to emphasize seasonality",
+      x = NULL, y = "Log of billions of cubic meters", color = NULL
+    ) +
+      theme_minimal()
+
+## As we enter colder winter months, it appears that natural gas production increases, and throughout the warmer summer months, natural gas production slows down.
+## This makes sense, as one would assume that in a colder country like Canada, more natural gas production in the colder months is necessary to meet the demand of people who want to use the natural gas to heat their homes.
+
+can_gas |>
+  gg_subseries(log_volume) +
+  labs(
+    title = "Subseries Plot: Canadian Gas Production",
+    y = "log(Volume)"
+  )
+
+library(seasonal)
+
+retail_nsa_x13 <- retail_ts |>
+  filter(series_id == "RSAFSNA") |>
+  model(x13 = X_13ARIMA_SEATS(sales)) |>
+  components()
+
+retail_nsa_x13 |> autoplot()
+
+### Seasonal factor of 1.10, for example, means that month is typically 10% above the trend.
+
+## The seasonal factor appears to be the highest in December, with sales ranging from roughly 10-20% higher than the trend (sales start at above 20% higher than the trend at the beginning of the data set, but decrease to about 10% by the most recent years.)
+## The size of the seasonal swings is changing over time, reaching lower positive extremes and roughly consistent negative extremes.
+
+sa_compare <- retail_nsa_x13 |>
+  as_tibble() |>
+  select(Month, mine = season_adjust) |>
+  left_join(
+    retail_ts |>
+      filter(series_id == "RSAFS") |>
+      as_tibble() |>
+      transmute(Month, census = sales),
+    by = "Month"
+  ) |>
+  mutate(pct_diff = 100 * log(mine) - log(census))
+
+sa_compare |>
+  ggplot(aes(x = Month, y= pct_diff)) +
+  geom_line() +
+  labs(
+    title = "My X-13 Seasonal Adjustment Minus the Census Bureau's",
+    x = NULL, y =  "Difference (%)"
+  ) + 
+  theme_minimal()
+
+## Considering the difference in percent begins in the near 1200% range, I'd say that my adjustment does not match the official one very well.
+## While my adjustment seems to match the official adjustment a little better during major recessions (the difference % drops significantly during both the 2008 financial crisis and the beginning of the COVID-19 pandemic), my seasonal adjustment seems to differ more and more from the census bureau's as the years in the data set climb higher.
+
+can_gas_fit <- can_gas |>
+  model(TSLM(log_volume ~ trend() + season()))
+report(can_gas_fit)
+
+can_gas_fit |>
+  tidy() |>
+  select(term, estimate, std.error, statistic, p.value) |>
+  knitr::kable(digits = 3)
+
+## The estimated average monthly growth rate of gas production is 0.004, or 0.4%.
+## The month with the most significant seasonal effect is June, with a seasonal effect estimate of -0.251.
+
+can_gas_fit |>
+  augment() |>
+  ggplot(aes(x = Month)) +
+  geom_line(aes(y = log_volume, color = "Actual")) +
+  geom_line(aes(y = .fitted, color = "Fitted")) +
+  labs(title = "Linear Trend + Seasonal Dummies Fit: Canadian Gas Production",
+       y = "log(Volume)", color = NULL) +
+  theme_minimal()
+
+## The fitted line does not do a very good job of tracking the actual series, in my opinion.
+## What the fitted line does do is well is track the series between 1990 and 2000, as the series is experiencing some relatively linear growth there. However, even between those year, since the fitted line exhibits constant seasonal variation over the years, it doesn't capture the reduction in seasonal swings that begin to occur past 1990.
+## The fitted line does a particularly bad job at capturing the temporary spike in Canadian gas production that begins around 1970, nor does it capture the increased seasonal variation in gas production  during that spike.
+## Overall, due to its nature as a linear fitted model and its inability to respond to changes in variations of seasonality over time, the linear trend model struggles to capture some of the important features of the Canadian gas production data.
+
+can_gas_fit |> gg_tsresiduals()
+
+can_gas_fit |>
+  augment() |>
+  features(.innov, ljung_box, lag = 24)
+
+## The residuals do not look like white noise. The plot of the ACF clearly shows persistence over time in the residuals, which means there is some factor unaccounted for in the linear trend model that would model the effect of these residuals and take care of them.
+## At the 5% level, the Ljung-Box text concludes that we reject the null hypothesis that the first 24 lags are uncorrelated.
 
