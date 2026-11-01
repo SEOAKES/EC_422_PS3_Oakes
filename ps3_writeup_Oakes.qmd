@@ -190,6 +190,110 @@ can_gas |>
 
 Include the plots and written answers requested in Part 3.
 
+Regarding the above plot of `can_gas`, the seasonal swings do seem to get larger are the series grows, but this is not true over the whole sample. It seems to generally be the case up until around 1990, where the seasonal swings become less pronounced despite the series continuing to trend up over time.
+
+I'm not quite sure how to describe the way the seasonal swings are changing over time, but it isn't completely related to the series' level trending up over time. Seasonal swings don't always get larger as the series grows.
+
+The following code adds a new column to `can_gas` that transforms `Volume` into the natural log of itself, called `log_volume` in the `tsibble`. The logged series is then plotted.
+
+```{r}
+#| echo: false
+
+# Should we log can_gas?
+
+can_gas <-  can_gas |>
+  mutate(log_volume = log(Volume))
+
+can_gas |>
+  autoplot(log_volume) +
+  labs(
+    title = "Natural Gas Production in Canada",
+    subtitle = "Monthly amounts, from January 1960 to February 2005",
+    x = NULL, y = "Log of billions of cubic meters", color = NULL
+  ) +
+  theme_minimal()
+```
+
+By logging Volume, some of the swings in the series have become less extreme, making me think that some of these swings were seasonal and increased as a result of the series' level trending upward over time. The trend line of the series also changed, from a positive linear trend to a trend with a shrinking positive rate of change over time.
+
+Since the abnormally large but consistent swings in certain parts of the data did not disappear and become uniform with other swings when Volume was logged, I don't think it's worth logging can_gas. While there is likely some seasonality present in the data contributing to the abnormal swings, there is clearly a larger factor at work causing them that is currently unaccounted for. Taking the log of the series doesn't contribute much to clarity in that department, so I'd say it's not very useful.
+
+I then repeated the same process of logging and plotting `sales` for the non-seasonally adjusted retail sales data in `retail_ts`, comparing it to a plot of the regular levels of the `sales`.
+
+```{r}
+#| echo: false
+
+# Should we log RSAFSNA?
+
+retail_ts |>
+  mutate(log_sales = log(sales)) |>
+  filter(series_id == "RSAFSNA") |>
+  autoplot(log_sales) +
+  labs(
+    title = "U.S. Retail and Food Services Sales",
+    subtitle = "Logged, not seasonally adjusted",
+    x = NULL, y = "log_sales", color = NULL
+  ) +
+  theme_minimal()
+
+retail_ts |>
+  filter(series_id == "RSAFSNA") |>
+  autoplot(sales) +
+  labs(
+    title = "U.S. Retail and Food Services Sales",
+    subtitle = "Not seasonally adjusted",
+    x = NULL, y = "Millions of dollars", color = NULL
+  ) +
+  scale_y_continuous(labels = scales::label_comma(scale =  1))
+theme_minimal()
+```
+
+The case for logging `retail_ts` is much stronger than the case for logging `can_gas`. Unlike `can_gas`, by logging the non-seasonally adjusted data in `retail_ts`, the seasonal swings have become mostly consistent in size over time and the trend has become more linear, both of which are the main goals of logging a variable.
+
+This next code chunk adds the month-over-month percentage growth rate to `can_gas` using both the direct/exact method and the first difference of the logged series as an estimation of the growth rate. The directly computed growth rate, `growth_direct`, is plotted. The absolute difference between the direct growth rate and the differenced log growth rate (`growth_logdiff`) is made into the column `growth_gap` and also plotted.
+
+```{r}
+#| echo: false
+
+# Growth rates
+
+can_gas <- can_gas |>
+  mutate(
+    growth_direct = 100 * difference(Volume) / lag(Volume),
+    growth_logdiff = 100 * difference(log_volume)
+  )
+can_gas |>
+  autoplot(growth_direct)
+
+can_gas <- can_gas |>
+  mutate(growth_gap = abs(growth_direct - growth_logdiff))
+can_gas |>
+  autoplot(growth_gap)
+```
+
+In this case, based on `growth_gap`, I don't think the log approximation is very good. The growth levels (both positive and negative) that can_gas experiences, particularly in the 1960s and the 1980s, are so extreme that the approximation that the first difference of the logged series provides is just not accurate enough. If the series weren't as volatile, perhaps the difference of the logged series would be acceptable.
+
+The final code chunk in this section compute the month-over-month log-difference growth rate of each series in `retail_ts`, `RSAFS` and `RSAFNA`, and plots it.
+
+```{r}
+#| echo: false
+
+retail_ts <- retail_ts |>
+  group_by_key() |>
+  mutate(growth_mom = 100 * difference(log(sales))) |>
+  ungroup()
+
+retail_ts |>
+  autoplot(growth_mom) +
+  labs(
+    title =  "Month-over-Month Growth: SA vs. NSA Retail Sales",
+    x = NULL, y = "Growth rate (%)", color = NULL
+  ) +
+  theme_minimal()
+```
+
+The month-over-month growth rate in the NSA series is much noisier than the month-over-month growth rate of the SA series. As I noted before, the NSA series is definitely affected by seasonality, and this shows in the month-over-month growth rate. When you remove seasonal factors, the growth rate (in this case, the change in retail sales between months) actually doesn't change that much.
+
 ## Seasonality
 
 Include your plots, model estimation output (as a table), Ljung–Box test results, and written answers requested in Part 4.

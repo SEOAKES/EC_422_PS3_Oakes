@@ -109,11 +109,8 @@ retail_ts |>
   ) +
   theme_minimal()
 
-## There are consistent spikes and drops in the NSA series, with huge spikes occurring at the end of a year and huge drops occurring at the beginning of a year.
-## The SA series does not have this same pattern. Its levels waver up and down the y-axis, but those small changes don't seem consistent or to correspond to seasonal changes.
-
-## The two series do follow the same path in the long run. 
-## Both the NSA and SA series are trending up at the same approximate rate over time, and larger peaks and valleys that are caused by recessions or high economic growth are evident in both series.
+## There are consistent spikes and drops in the NSA series, with huge spikes occurring at the end of a year and huge drops occurring at the beginning of a year. The SA series does not have this same pattern. Its levels waver up and down the y-axis, but those small changes don't seem consistent or to correspond to seasonal changes.
+## The two series do follow the same path in the long run. Both the NSA and SA series are trending up at the same approximate rate over time, and larger peaks and valleys that are caused by recessions or high economic growth are evident in both series.
 
 can_gas |>
   autoplot(Volume) +
@@ -136,8 +133,7 @@ retail_ts |>
   scale_y_continuous(labels = scales::label_comma(scale =  1))
   theme_minimal()
 
-## I chose to use scale_y_continuous() to clean up the y-axis.
-## Previously, the units of the y-axis were in scientific notation, which is confusing and didn't quite match the y-axis label of units being in millions of dollars. To match the axis label, the display units on the y-axis needed to match the scale of units in the data set. So, I changed their scale so the data set, y-axis labels, and y-axis units all match up.
+## I chose to use scale_y_continuous() to clean up the y-axis. Previously, the units of the y-axis were in scientific notation, which is confusing and didn't quite match the y-axis label of units being in millions of dollars. To match the axis label, the display units on the y-axis needed to match the scale of units in the data set. So, I changed their scale so the data set, y-axis labels, and y-axis units all match up.
 
 ## The seasonal swings in can_gas do seem to get larger are the series grows, but this is not true over the whole same. It seems to generally be the case up until around 1990, where the seasonal swings become less pronounced despite the series continuing to trend up over time.
 ## I'm not quite sure how to describe the way the seasonal swings are changing over time, but it isn't completely related to the series' level trending up over time.
