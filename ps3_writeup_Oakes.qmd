@@ -150,6 +150,7 @@ Returning to `retail_ts`, the next code chunk creates a basic plot of `retail_ts
 # Plotting with autoplot
 
 library(ggplot2)
+library(scales)
 
 retail_ts |> autoplot(sales)
 
@@ -160,11 +161,11 @@ retail_ts |>
     subtitle = "Seasonally adjusted vs. not seasonally adjusted",
     x = NULL, y = "Millions of dollars", color = NULL
   ) +
-  scale_y_continuous(labels = scales::label_comma(scale =  1))
-theme_minimal()
+  scale_y_continuous(labels = label_comma())
+  theme_minimal()
 ```
 
-I chose to use scale_y_continuous() to clean up the y-axis of the customized plot of `retail_ts`. Previously, the units of the y-axis were in scientific notation, which is confusing and didn't quite match the y-axis label of units being in millions of dollars. To match the axis label, the display units on the y-axis needed to match the scale of units in the data set. So, I changed their scale so the data set, y-axis labels, and y-axis units all match up.
+I chose to use scale_y_continuous() to clean up the y-axis of the customized plot of `retail_ts`. Previously, the units of the y-axis were in scientific notation, which is confusing and didn't quite match the y-axis label of units being in millions of dollars. To match the axis label, the display units on the y-axis needed to match the scale of units in the data set. So, I changed their scale so the data set, y-axis labels, and y-axis units all match up. (However, since it prints this incredibly long string of \<theme\> customization data, for convenience sake, I won't be using this method to clean up the y-axis for any other plots, even if they should have it. Please just pretend the y-axis looks like it does here.)
 
 There are consistent spikes and drops in the NSA series, with huge spikes occurring at the end of a year and huge drops occurring at the beginning of a year. The SA series does not have this same pattern. Its levels waver up and down the y-axis, but those small changes don't seem consistent or to correspond to seasonal changes.
 
@@ -241,7 +242,6 @@ retail_ts |>
     subtitle = "Not seasonally adjusted",
     x = NULL, y = "Millions of dollars", color = NULL
   ) +
-  scale_y_continuous(labels = scales::label_comma(scale =  1))
 theme_minimal()
 ```
 
@@ -305,7 +305,6 @@ retail_ts |>
     title = "Seasonal Pattern in NSA Retail Sales",
     y = "Millions of dollars"
   ) +
-  scale_y_continuous(labels = scales::label_comma(scale =  1))
 theme_minimal()
 
 retail_ts |>
@@ -315,7 +314,6 @@ retail_ts |>
     title = "Seasonal Pattern in SA Retail Sales",
     y = "Millions of dollars"
   ) +
-  scale_y_continuous(labels = scales::label_comma(scale =  1))
 theme_minimal()
 ```
 
@@ -452,7 +450,8 @@ can_gas_fit |> gg_tsresiduals()
 
 can_gas_fit |>
   augment() |>
-  features(.innov, ljung_box, lag = 24)
+  features(.innov, ljung_box, lag = 24) |>
+  knitr::kable(digits = 3)
 ```
 
 The residuals do not look like white noise. The plot of the ACF clearly shows persistence over time in the residuals, which means there is some factor unaccounted for in the linear trend model that would model the effect of these residuals and take care of them.
@@ -461,7 +460,67 @@ At the 5% level, the Ljung-Box text concludes that we reject the null hypothesis
 
 ## Forecast Evaluation
 
-Include your accuracy tables, the DM test results, and the written answers requested in Part 5.
+Now, let's run some tests on the forecast accuracy of a seasonal random walk forecast model and the accuracy of a time series linear model and compare their performance. We'll do this using the `can_gas` data set, where the seasonal random walk model will be forecasting based on `Volume` and the TSLM model will be forecasting based on the log of `Volume`. We will be running a TS-CV forecast generation method with an expanding window.
+
+```{r}
+#| echo: false
+
+gas_cv_fc <- can_gas |>
+  select(Month, Volume) |>
+  stretch_tsibble(.init = 240, .step = 1) |>
+  model(snaive = SNAIVE(Volume),
+        tslm = TSLM(log(Volume) ~ trend() + season())) |>
+  forecast(h = 1)
+
+gas_cv_fc |>
+  accuracy(can_gas, measures = list(MAE = MAE, RMSE = RMSE)) |>
+  knitr::kable(digits = 3)
+```
+
+The first forecast that is evaluated is January 1980, and the last forecast that is evaluated is March 2005. The MAE of the SNAIVE test is 0.562, and the MAE of the TSLM test is 4.009. The RMSE of the SNAIVE test is 0.702, and the RMSE of the TSLM test is 4.362.
+
+It appears that the SNAIVE model forecasts much more accurately, and both the MAE and RMSE metrics agree on this.
+
+To test if the difference we found above is significant, we'll conduct a Diebold-Mariano test of equal forecast accuracy.
+
+```{r}
+#| echo: false
+
+errs <- gas_cv_fc |>
+  as_tibble() |>
+  left_join(as_tibble(can_gas) |>
+              select(Month, actual = Volume),
+            by = "Month") |>
+  mutate(e = actual - .mean) |>
+  select(Month, .model, e) |>
+  pivot_wider(names_from = .model, values_from = e) |>
+  na.omit()
+
+forecast::dm.test(errs$snaive, errs$tslm, h = 1, power = 1)
+```
+
+The DM-statistic is -31.278, and the p-value is less than 2.2e-16. With how astronomically small the p-value, it's clear that we must reject the null hypothesis of the DM test that the SNAIVE model and TSLM model have equal forecast accuracy. In this case, we can see that without a doubt, SNAIVE is more effective at forecasting.
+
+How might each model's forecast accuracy change when a rolling window is used instead of an expanding window in the TS-CV?
+
+```{r}
+#| echo: false
+
+gas_cv_fc_rolling <- can_gas |>
+  select(Month, Volume) |>
+  slide_tsibble(.size = 240, .step = 1) |>
+  model(snaive = SNAIVE(Volume),
+        tslm = TSLM(log(Volume) ~ trend() + season())) |>
+  forecast(h = 1)
+
+gas_cv_fc_rolling |>
+  accuracy(can_gas, measures = list(MAE = MAE, RMSE = RMSE)) |>
+  knitr::kable(digits = 3)
+```
+
+The MAE of the SNAIVE test is 0.562, and the MAE of the TSLM test is 2.095. The RMSE of the SNAIVE test is 0.702, and the RMSE of the TSLM test is 2.425.
+
+The model whose accuracy changed more with the rolling window was the TSLM model. I imagine this is the case because the TSLM model struggles to make adjust to extreme changes over time in the data, both in its levels and seasonality. By changing the forecast generating method to a rolling window, the TSLM model doesn't have to take into account old observations that don't correspond to the current trends of the series. Its ability to respond to changes in how the data series generates is much more enhanced.
 
 ## Reflection
 

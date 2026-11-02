@@ -125,12 +125,12 @@ can_gas |>
 
 retail_ts |>
   autoplot(sales) +
+  scale_y_continuous(labels = scales::label_number(scale =  1)) +
   labs(
     title = "U.S. Retail and Food Services Sales",
     subtitle = "Seasonally adjusted vs. not seasonally adjusted",
     x = NULL, y = "Millions of dollars", color = NULL
   ) +
-  scale_y_continuous(labels = scales::label_comma(scale =  1))
   theme_minimal()
 
 ## I chose to use scale_y_continuous() to clean up the y-axis. Previously, the units of the y-axis were in scientific notation, which is confusing and didn't quite match the y-axis label of units being in millions of dollars. To match the axis label, the display units on the y-axis needed to match the scale of units in the data set. So, I changed their scale so the data set, y-axis labels, and y-axis units all match up.
@@ -172,12 +172,12 @@ retail_ts |>
 retail_ts |>
   filter(series_id == "RSAFSNA") |>
   autoplot(sales) +
+  scale_y_continuous(labels = scales::comma) +
   labs(
     title = "U.S. Retail and Food Services Sales",
     subtitle = "Not seasonally adjusted",
     x = NULL, y = "Millions of dollars", color = NULL
-  ) +
-  scale_y_continuous(labels = scales::label_comma(scale =  1))
+  ) 
   theme_minimal()
 
 ## The case for logging retail_ts is much stronger than the case for logging can)gas. 
@@ -346,10 +346,10 @@ gas_cv_fc |>
 
 ## First forecast that is evaluated: January 1980
 ## Last forecast that is evaluated: March 2005
-## MAE of snaive: 0.562
-## MAE of tslm: 4.01
-## RMSE of snaive: 0.702
-## RMSE of tslm: 4.36
+# MAE of snaive: 0.562
+# MAE of tslm: 4.01
+# RMSE of snaive: 0.702
+# RMSE of tslm: 4.36
 
 ## It appears that the SNAIVE model forecasts much more accurately, and both the MAE and RMSE metrics agree on this. 
 
